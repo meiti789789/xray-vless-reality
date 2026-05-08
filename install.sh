@@ -152,11 +152,20 @@ fi
 echo
 echo -e "$yellow打开BBR$none"
 echo "----------------------------------------------------------------"
-sed -i '/net.ipv4.tcp_congestion_control/d' /etc/sysctl.conf
-sed -i '/net.core.default_qdisc/d' /etc/sysctl.conf
-echo "net.ipv4.tcp_congestion_control = bbr" >>/etc/sysctl.conf
-echo "net.core.default_qdisc = fq" >>/etc/sysctl.conf
-sysctl -p >/dev/null 2>&1
+sudo touch /etc/sysctl.d/99-bbr.conf
+sudo sed -i '/^net\.core\.default_qdisc/d' /etc/sysctl.d/99-bbr.conf
+sudo sed -i '/^net\.ipv4\.tcp_congestion_control/d' /etc/sysctl.d/99-bbr.conf
+echo 'net.core.default_qdisc=fq' | sudo tee -a /etc/sysctl.d/99-bbr.conf
+echo 'net.ipv4.tcp_congestion_control=bbr' | sudo tee -a /etc/sysctl.d/99-bbr.conf
+echo 'tcp_bbr' | sudo tee /etc/modules-load.d/bbr.conf
+sudo sysctl --system
+
+# 旧写法
+# sed -i '/net.ipv4.tcp_congestion_control/d' /etc/sysctl.conf
+# sed -i '/net.core.default_qdisc/d' /etc/sysctl.conf
+# echo "net.ipv4.tcp_congestion_control = bbr" >>/etc/sysctl.conf
+# echo "net.core.default_qdisc = fq" >>/etc/sysctl.conf
+# sysctl -p >/dev/null 2>&1
 
 # 配置 VLESS_Reality 模式, 需要:端口, UUID, x25519公私钥, 目标网站
 echo
