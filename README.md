@@ -49,6 +49,14 @@ echo "net.ipv4.tcp_congestion_control = bbr" >>/etc/sysctl.conf
 echo "net.core.default_qdisc = fq" >>/etc/sysctl.conf
 sysctl -p >/dev/null 2>&1
 ```
+如何验证是否开启成功？
+执行完上面的命令后，你可以输入以下命令来检查 BBR 是否已经在运行：
+
+```bash
+lsmod | grep bbr
+```
+如果终端返回了类似 tcp_bbr                20480  1 这样的内容（只要包含 tcp_bbr），就说明 BBR 已经成功开启并在后台加速你的网络了！
+
 2. 安装 Xray
 ```bash
 bash -c "$(curl -L [https://github.com/XTLS/Xray-install/raw/main/install-release.sh](https://github.com/XTLS/Xray-install/raw/main/install-release.sh))" @ install
