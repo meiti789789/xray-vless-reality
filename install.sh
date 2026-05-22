@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 等待1秒, 避免curl下载脚本的打印与脚本本身的显示冲突
+# 等待1秒, 避免curl下载脚本的打印与脚本本身的显示冲突, 吃掉了提示用户按回车继续的信息
 sleep 1
 
 echo -e "                    _ ___                    \n ___ ___ __ __ ___ _| |  _|___ __ __   _ ___ \n|-_ |_  |  |  |-_ | _ |   |- _|  |  |_| |_  |\n|___|___|  _  |___|___|_|_|___|  _  |___|___|\n        |_____|               |_____|        "
@@ -46,7 +46,6 @@ uninstall_all() {
     
     # 3. 清理 Cron 定时任务
     echo -e "$cyan[3/3] 正在清理流量重置定时任务...$none"
-    # 删除含有 "xray api statsquery" 的定时任务
     crontab -l 2>/dev/null | grep -v "xray api statsquery" | crontab -
     
     # 4. 删除生成的 URL 信息文件
@@ -59,7 +58,7 @@ uninstall_all() {
 # ==========================================
 # 主菜单界面
 # ==========================================
-echo -e "$cyan欢迎使用 Xray VLESS-Reality 极简脚本 (带 TG 机器人版)$none"
+echo -e "$cyan欢迎使用 Xray VLESS-Reality 极简脚本 (随机端口 + 流量统计 + TG 控制台)$none"
 echo "----------------------------------------------------------------"
 echo -e "${green}1.${none} 安装 / 配置 Xray + TG 机器人"
 echo -e "${red}2.${none} 完全卸载 (彻底清理 Xray 和 TG 机器人)"
@@ -83,9 +82,8 @@ case "$menu_choice" in
         ;;
 esac
 
-
 # ==========================================
-# 以下是安装流程核心代码
+# 安装流程核心代码开始
 # ==========================================
 
 # 确保有 curl 和 wget
@@ -103,7 +101,6 @@ echo "----------------------------------------------------------------"
 InFaces=($(ls /sys/class/net/ | grep -E '^(eth|ens|eno|esp|enp|venet|vif)'))
 
 for i in "${InFaces[@]}"; do  # 从网口循环获取IP
-    # 增加超时时间, 以免在某些网络环境下请求IPv6等待太久
     Public_IPv4=$(curl -4s --interface "$i" -m 2 https://www.cloudflare.com/cdn-cgi/trace | grep -oP "ip=\K.*$")
     Public_IPv6=$(curl -6s --interface "$i" -m 2 https://www.cloudflare.com/cdn-cgi/trace | grep -oP "ip=\K.*$")
 
@@ -115,16 +112,12 @@ for i in "${InFaces[@]}"; do  # 从网口循环获取IP
     fi
 done
 
-# 通过IP, host, 时区, 生成UUID. 重装脚本不改变, 不改变节点信息, 方便个人使用
+# 通过IP, host, 时区, 生成UUID.
 uuidSeed=${IPv4}${IPv6}$(cat /proc/sys/kernel/hostname)$(timedatectl | awk '/Time zone/ {print $3}')
 default_uuid=$(curl -sL https://www.uuidtools.com/api/generate/v3/namespace/ns:dns/name/${uuidSeed} | grep -oP '[^-]{8}-[^-]{4}-[^-]{4}-[^-]{4}-[^-]{12}')
 
-# 如果你想使用纯随机的UUID
-# default_uuid=$(cat /proc/sys/kernel/random/uuid)
-
 # ----------------------------------------------------------------
 # 检测是否定义了任意一个环境变量
-# 若定义了至少一个, 则忽略命令行参数, 完全以环境变量为准
 # ----------------------------------------------------------------
 _use_env_vars=0
 if [[ -n "${_MYIP_}" || -n "${_MYPORT_}" || -n "${_MYDOMAIN_}" || -n "${_MYUUID_}" ]]; then
@@ -132,21 +125,17 @@ if [[ -n "${_MYIP_}" || -n "${_MYPORT_}" || -n "${_MYDOMAIN_}" || -n "${_MYUUID_
 fi
 
 if [[ $_use_env_vars -eq 1 ]]; then
-    # ---- 环境变量模式 ----
     echo -e "$cyan[环境变量模式] 检测到环境变量, 忽略命令行参数.$none"
     echo "----------------------------------------------------------------"
 
-    # _MYIP_: 根据IP判断 netstack, 并设置 ip
     if [[ -n "${_MYIP_}" ]]; then
         ip="${_MYIP_}"
-        # 简单判断是否含有 ":" 来区分 IPv6 / IPv4
         if [[ "${ip}" == *:* ]]; then
             netstack=6
         else
             netstack=4
         fi
     else
-        # 未定义 _MYIP_, 沿用自动探测逻辑
         if [[ -n "$IPv4" ]]; then
             netstack=4
             ip=${IPv4}
@@ -158,21 +147,19 @@ if [[ $_use_env_vars -eq 1 ]]; then
         fi
     fi
 
-    # _MYPORT_: 端口, 默认 443
+    # 环境变量如果没定义端口，就随机生成
     if [[ -n "${_MYPORT_}" ]]; then
         port="${_MYPORT_}"
     else
-        port=443
+        port=$((RANDOM % 55535 + 10000))
     fi
 
-    # _MYDOMAIN_: 域名, 默认 learn.microsoft.com
     if [[ -n "${_MYDOMAIN_}" ]]; then
         domain="${_MYDOMAIN_}"
     else
         domain="learn.microsoft.com"
     fi
 
-    # _MYUUID_: UUID, 默认使用种子生成的 UUID
     if [[ -n "${_MYUUID_}" ]]; then
         uuid="${_MYUUID_}"
     else
@@ -187,8 +174,6 @@ if [[ $_use_env_vars -eq 1 ]]; then
     echo "----------------------------------------------------------------"
 
 elif [ $# -ge 1 ]; then
-    # ---- 命令行参数模式 ----
-    # 第1个参数是搭在ipv4还是ipv6上
     case ${1} in
     4)
         netstack=4
@@ -198,11 +183,11 @@ elif [ $# -ge 1 ]; then
         netstack=6
         ip=${IPv6}
         ;;
-    *) # initial
-        if [[ -n "$IPv4" ]]; then  # 检查是否获取到IP地址
+    *)
+        if [[ -n "$IPv4" ]]; then
             netstack=4
             ip=${IPv4}
-        elif [[ -n "$IPv6" ]]; then  # 检查是否获取到IP地址
+        elif [[ -n "$IPv6" ]]; then
             netstack=6
             ip=${IPv6}
         else
@@ -211,19 +196,16 @@ elif [ $# -ge 1 ]; then
         ;;
     esac
 
-    # 第2个参数是port
     port=${2}
     if [[ -z $port ]]; then
-      port=443
+      port=$((RANDOM % 55535 + 10000))
     fi
 
-    # 第3个参数是域名
     domain=${3}
     if [[ -z $domain ]]; then
       domain="learn.microsoft.com"
     fi
 
-    # 第4个参数是UUID
     uuid=${4}
     if [[ -z $uuid ]]; then
         uuid=${default_uuid}
@@ -252,7 +234,6 @@ bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release
 # 更新 geodata
 bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install-geodata
 
-# 如果脚本带参数执行的, 要在安装了xray之后再生成默认私钥公钥shortID
 if [[ -n $uuid ]]; then
   reality_key_seed=$(echo -n ${uuid} | md5sum | head -c 32 | base64 -w 0 | tr '+/' '-_' | tr -d '=')
   tmp_key=$(echo -n ${reality_key_seed} | xargs xray x25519 -i)
@@ -285,7 +266,6 @@ echo
 echo -e "$yellow配置 VLESS_Reality 模式$none"
 echo "----------------------------------------------------------------"
 
-# 网络栈
 if [[ -z $netstack ]]; then
   echo
   echo -e "如果你的小鸡是${magenta}双栈(同时有IPv4和IPv6的IP)${none}，请选择你把Xray搭在哪个'网口'上"
@@ -309,11 +289,11 @@ if [[ -z $netstack ]]; then
   fi
 fi
 
-# 端口
+# 端口逻辑：如果你没指定环境变量/参数，在这里交互提示你输入，默认值是随机的
 if [[ -z $port ]]; then
-  default_port=443
+  default_port=$((RANDOM % 55535 + 10000))
   while :; do
-    read -p "$(echo -e "请输入端口 [${magenta}1-65535${none}] Input port (默认Default ${cyan}${default_port}$none):")" port
+    read -p "$(echo -e "请输入端口 [${magenta}1-65535${none}] Input port (默认随机端口 ${cyan}${default_port}$none):")" port
     [ -z "$port" ] && port=$default_port
     case $port in
     [1-9] | [1-9][0-9] | [1-9][0-9][0-9] | [1-9][0-9][0-9][0-9] | [1-5][0-9][0-9][0-9][0-9] | 6[0-4][0-9][0-9][0-9] | 65[0-4][0-9][0-9] | 655[0-3][0-5])
@@ -331,7 +311,6 @@ if [[ -z $port ]]; then
   done
 fi
 
-# Xray UUID
 if [[ -z $uuid ]]; then
   while :; do
     echo -e "请输入 "$yellow"UUID"$none" "
@@ -353,7 +332,6 @@ if [[ -z $uuid ]]; then
   done
 fi
 
-# x25519公私钥
 if [[ -z $private_key ]]; then
   reality_key_seed=$(echo -n ${uuid} | md5sum | head -c 32 | base64 -w 0 | tr '+/' '-_' | tr -d '=')
   tmp_key=$(echo -n ${reality_key_seed} | xargs xray x25519 -i)
@@ -379,7 +357,6 @@ if [[ -z $private_key ]]; then
   echo
 fi
 
-# ShortID
 if [[ -z $shortid ]]; then
   default_shortid=$(echo -n ${uuid} | sha1sum | head -c 16)
   while :; do
@@ -403,7 +380,6 @@ if [[ -z $shortid ]]; then
   done
 fi
 
-# 目标网站
 if [[ -z $domain ]]; then
   echo -e "请输入一个 ${magenta}合适的域名${none} Input the domain"
   read -p "(例如: learn.microsoft.com): " domain
@@ -416,14 +392,15 @@ if [[ -z $domain ]]; then
   echo
 fi
 
+
 # ===========================
-# 写入自带流量统计功能的 config.json
+# 写入支持统计功能的 config.json
 # ===========================
 echo
 echo -e "$yellow 配置 /usr/local/etc/xray/config.json $none"
 echo "----------------------------------------------------------------"
 cat > /usr/local/etc/xray/config.json <<-EOF
-{ // VLESS + Reality
+{ // VLESS + Reality + Stats
   "log": {
     "access": "/var/log/xray/access.log",
     "error": "/var/log/xray/error.log",
@@ -557,7 +534,7 @@ service xray restart
 
 
 # ==========================================
-# 新增功能区：配置 Telegram 机器人和定时清空流量任务
+# TG 机器人和流量清零任务配置
 # ==========================================
 echo
 echo -e "$yellow【可选功能】配置 Telegram 流量查询与控制机器人$none"
@@ -567,17 +544,14 @@ if [[ -n "$TG_TOKEN" ]]; then
     read -p "请输入你的 Telegram Chat ID (防滥用, 必填纯数字): " TG_CHAT_ID
     if [[ -n "$TG_CHAT_ID" ]]; then
         echo -e "$green正在部署 Telegram 机器人并配置环境...$none"
-        # 安装 python 和 requests 库 (兼容 Debian 12 强制环境)
         apt-get install -y python3 python3-requests
 
-        # 生成 Python 脚本 (使用定界符，防止bash干扰里面的变量)
         cat > /root/tg_xray_bot.py <<-'EOF'
 import subprocess
 import requests
 import time
 import datetime
 
-# --- 由脚本自动替换参数 ---
 BOT_TOKEN = 'YOUR_BOT_TOKEN_HERE'
 ALLOWED_CHAT_ID = YOUR_CHAT_ID_HERE
 
@@ -692,7 +666,7 @@ def main():
                             send_message(chat_id, f"❌ Xray 重启失败，当前状态: {status}")
 
                     elif text == "🌀 重启 VPS":
-                        send_message(chat_id, "⚠️ **正在向服务器发送重启指令...**\n\nVPS 即将断开连接并开始重启，大约需要 1-2 分钟。请在重启完成后重新呼出菜单。")
+                        send_message(chat_id, "⚠️ **正在向服务器发送重启指令...**\n\nVPS 即将断开连接并开始重启，大约需要 1-2 分钟。")
                         time.sleep(1)
                         execute_cmd("reboot")
 
@@ -703,11 +677,9 @@ if __name__ == '__main__':
     main()
 EOF
 
-        # 替换对应的 Token 和 Chat ID
         sed -i "s/YOUR_BOT_TOKEN_HERE/${TG_TOKEN}/g" /root/tg_xray_bot.py
         sed -i "s/YOUR_CHAT_ID_HERE/${TG_CHAT_ID}/g" /root/tg_xray_bot.py
 
-        # 生成 Systemd 服务配置
         cat > /etc/systemd/system/xray-tg-bot.service <<-EOF
 [Unit]
 Description=Telegram Bot for Xray Traffic Stats
@@ -729,11 +701,9 @@ EOF
         systemctl restart xray-tg-bot
         echo -e "$green✅ Telegram 机器人服务已后台启动！你可以去 TG 发送 /start 了。$none"
 
-        # 配置每月18号自动清理流量的Cron
         echo -e "$green正在配置每月18号流量自动重置任务...$none"
         systemctl enable cron >/dev/null 2>&1
         systemctl start cron >/dev/null 2>&1
-        # 追加进 crontab (如果不存在的话)
         (crontab -l 2>/dev/null | grep -v "xray api statsquery"; echo "0 0 18 * * /usr/local/bin/xray api statsquery --server=127.0.0.1:10085 -pattern 'user>>>user@reality>>>traffic>>>downlink' --reset > /dev/null 2>&1") | crontab -
         (crontab -l 2>/dev/null | grep -v "xray api statsquery"; echo "0 0 18 * * /usr/local/bin/xray api statsquery --server=127.0.0.1:10085 -pattern 'user>>>user@reality>>>traffic>>>uplink' --reset > /dev/null 2>&1") | crontab -
         echo -e "$green✅ 每月18号凌晨自动清零流量已设置完毕。$none"
@@ -794,11 +764,9 @@ if [[ $netstack == "6" ]]; then
     echo "----------------------------------------------------------------"
     pause
 
-    # 安装 WARP IPv4
     curl -LO https://gitlab.com/fscarmen/warp/-/raw/main/menu.sh
     yes "" | bash menu.sh 4
 
-    # 重启 Xray
     echo
     echo -e "$yellow重启 Xray$none"
     echo "----------------------------------------------------------------"
@@ -815,11 +783,9 @@ elif  [[ $netstack == "4" ]]; then
     echo "----------------------------------------------------------------"
     pause
 
-    # 安装 WARP IPv6
     curl -LO https://gitlab.com/fscarmen/warp/-/raw/main/menu.sh
     yes "" | bash menu.sh 6
 
-    # 重启 Xray
     echo
     echo -e "$yellow重启 Xray$none"
     echo "----------------------------------------------------------------"
