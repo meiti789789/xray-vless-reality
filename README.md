@@ -177,7 +177,12 @@ bash <(curl -L git.io/warp.sh) 4
 
 # Uninstall
 ```
+如果你只是想单独卸载并重装 Xray
 bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ remove --purge
+
+如果你想把服务器彻底清理干净（包括 Xray 和机器人）
+bash <(curl -L https://raw.githubusercontent.com/meiti789789/xray-vless-reality/main/install.sh)
+
 ```
 
 # 私货
