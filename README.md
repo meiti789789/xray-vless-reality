@@ -35,13 +35,8 @@ Xray, VLESS_Reality模式 极简一键脚本
 Reality底层是TCP直连，如果你的VPS已经被墙，那肯定用不了。出门左转 https://github.com/crazypeace/v2ray_wss
 
 # 一键安装
-```
-apt update
-apt install -y curl
-```
-```
-bash <(curl -L https://github.com/crazypeace/xray-vless-reality/raw/main/install.sh)
-```
+
+apt update && apt install -y curl && bash <(curl -L https://raw.githubusercontent.com/meiti789789/xray-vless-reality/main/install.sh)
 
 脚本中很大部分都是在校验用户的输入。其实照着下面的步骤自己配置就行了。
 
