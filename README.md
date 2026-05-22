@@ -176,8 +176,9 @@ vless://${xray_id}@${ip}:${port}?encryption=none&flow=xtls-rprx-vision&security=
 脚本支持带参数静默运行
 支持跳过交互界面，直接通过环境变量或参数传参安装。
 
-Bash
+```bash
 bash <(curl -L [https://raw.githubusercontent.com/meiti789789/xray-vless-reality/main/install.sh](https://raw.githubusercontent.com/meiti789789/xray-vless-reality/main/install.sh)) <netstack> [port] [domain] [UUID]
+```
 netstack： 6 表示 IPv6 入站；4 表示 IPv4 入站。
 
 port： 端口 (不写的话, 自动生成随机高位端口)
