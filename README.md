@@ -31,6 +31,7 @@ Xray, VLESS_Reality模式 极简一键脚本 + Telegram 全自动服务器管理
 ## 一键安装 / 卸载命令
 
 本脚本已将安装与彻底卸载集成在一个主菜单中，复制以下命令并在 SSH 终端运行即可：
-
+-----------------------------------------------------------
 ```bash
 apt update && apt install -y curl && bash <(curl -L https://raw.githubusercontent.com/meiti789789/xray-vless-reality/main/install.sh)
+-----------------------------------------------------------
