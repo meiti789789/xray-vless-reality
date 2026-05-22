@@ -35,9 +35,3 @@ Xray, VLESS_Reality模式 极简一键脚本 + Telegram 全自动服务器管理
 ```bash
 apt update && apt install -y curl && bash <(curl -L https://raw.githubusercontent.com/meiti789789/xray-vless-reality/main/install.sh)
 -----------------------------------------------------------
-卸载说明：重新运行上述命令，并在弹出的菜单中选择 2 (完全卸载)，脚本会自动将 Xray 主程序、配置文件、TG 机器人服务、Python 脚本以及 Cron 定时任务彻底清理干净，不留痕迹。
-
-
-具体手搓步骤 (原理解析)
-脚本中很大部分都是在校验用户的输入。如果你不放心开源脚本，完全可以照着下面的步骤自己配置。
-
