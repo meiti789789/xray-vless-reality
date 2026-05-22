@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# 等待1秒, 避免curl下载脚本的打印与脚本本身的显示冲突, 吃掉了提示用户按回车继续的信息
+# 等待1秒, 避免curl下载脚本的打印与脚本本身的显示冲突
 sleep 1
 
 echo -e "                    _ ___                    \n ___ ___ __ __ ___ _| |  _|___ __ __   _ ___ \n|-_ |_  |  |  |-_ | _ |   |- _|  |  |_| |_  |\n|___|___|  _  |___|___|_|_|___|  _  |___|___|\n        |_____|               |_____|        "
@@ -23,6 +23,70 @@ pause() {
     read -rsp "$(echo -e "按 $green Enter 回车键 $none 继续....或按 $red Ctrl + C $none 取消.")" -d $'\n'
     echo
 }
+
+# ==========================================
+# 卸载功能模块 (完全清理 Xray + TG 机器人)
+# ==========================================
+uninstall_all() {
+    echo
+    echo -e "$yellow正在执行彻底卸载...$none"
+    echo "----------------------------------------------------------------"
+    
+    # 1. 卸载 Xray
+    echo -e "$cyan[1/3] 正在卸载 Xray 并清理配置...$none"
+    bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ remove --purge
+    
+    # 2. 清理 TG 机器人
+    echo -e "$cyan[2/3] 正在清理 Telegram 机器人服务...$none"
+    systemctl stop xray-tg-bot >/dev/null 2>&1
+    systemctl disable xray-tg-bot >/dev/null 2>&1
+    rm -f /etc/systemd/system/xray-tg-bot.service
+    rm -f /root/tg_xray_bot.py
+    systemctl daemon-reload
+    
+    # 3. 清理 Cron 定时任务
+    echo -e "$cyan[3/3] 正在清理流量重置定时任务...$none"
+    # 删除含有 "xray api statsquery" 的定时任务
+    crontab -l 2>/dev/null | grep -v "xray api statsquery" | crontab -
+    
+    # 4. 删除生成的 URL 信息文件
+    rm -f ~/_vless_reality_url_
+    
+    echo -e "$green✅ 卸载完成！Xray、配置文件、TG机器人和定时任务已被全部清理。$none"
+    exit 0
+}
+
+# ==========================================
+# 主菜单界面
+# ==========================================
+echo -e "$cyan欢迎使用 Xray VLESS-Reality 极简脚本 (带 TG 机器人版)$none"
+echo "----------------------------------------------------------------"
+echo -e "${green}1.${none} 安装 / 配置 Xray + TG 机器人"
+echo -e "${red}2.${none} 完全卸载 (彻底清理 Xray 和 TG 机器人)"
+echo -e "${yellow}0.${none} 退出"
+echo "----------------------------------------------------------------"
+read -p "请输入选项 [0-2]: " menu_choice
+
+case "$menu_choice" in
+    1)
+        # 继续执行下方的安装流程
+        ;;
+    2)
+        uninstall_all
+        ;;
+    0)
+        exit 0
+        ;;
+    *)
+        error
+        exit 1
+        ;;
+esac
+
+
+# ==========================================
+# 以下是安装流程核心代码
+# ==========================================
 
 # 确保有 curl 和 wget
 apt-get -y install curl wget -qq
@@ -602,7 +666,7 @@ def main():
                             f"📥 下载: {down} GB\n"
                             f"📤 上传: {up} GB\n"
                             f"🌐 总计: {total} GB\n\n"
-                            f"🔄 下次重置: {next_date}"
+                            f"🔄 下次自动重置: {next_date}"
                         )
                         send_message(chat_id, reply_text)
 
