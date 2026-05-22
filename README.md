@@ -1,6 +1,15 @@
 # xray-vless-reality
 Xray, VLESS_Reality模式 极简一键脚本
 
+🚀 在原作者基本上增加核心修改点说明：
+自动修改了 config.json：加入 api、stats、policy 模块，新增了 10085 本地监听端口，并给客户端加上了 "email": "user@reality"。
+
+新增交互式设置 TG 机器人：在生成配置文件后，脚本会弹出提示，询问你是否要配置 TG 机器人。如果输入了 Token 和 Chat ID，它会自动生成 Python 脚本并注册为后台长久运行的 Systemd 服务。
+
+修复了依赖包冲突：为了兼容 Debian 12 的 PEP 668 限制，使用了 apt-get install python3-requests 而不是 pip，确保安装 100% 顺畅。
+
+自动配置了定时任务（Cron）：如果是安装机器人，会自动帮你写好每月 18 号零点的流量清零任务。
+
 # 说明 
 这个一键脚本超级简单。有效语句8行(其中BBR 5行, 安装Xray 1行, 生成x25519公私钥 1行，生成UUID 1行)+Xray配置文件69行(其中你需要修改4行), 其它都是用来检验小白输入错误参数或者搭建条件不满足的。
 
