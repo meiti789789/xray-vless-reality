@@ -1,217 +1,36 @@
-# xray-vless-reality
-Xray, VLESS_Reality模式 极简一键脚本
+# xray-vless-reality (定制版)
+Xray, VLESS_Reality模式 极简一键脚本 + Telegram 全自动服务器管理台
 
--------------------------------------------------------------------------------
+基于 crazypeace (https://github.com/crazypeace/xray-vless-reality) 的极简脚本深度定制，保留了原版轻量、无废话的特性，并大幅增强了实用功能和交互体验。
 
-🚀 在原作者基本上增加核心修改点说明：
-自动修改了 config.json：加入 api、stats、policy 模块，新增了 10085 本地监听端口，并给客户端加上了 "email": "user@reality"。
+---
 
-新增交互式设置 TG 机器人：在生成配置文件后，脚本会弹出提示，询问你是否要配置 TG 机器人。如果输入了 Token 和 Chat ID，它会自动生成 Python 脚本并注册为后台长久运行的 Systemd 服务。
+## 核心定制与增强功能
 
-修复了依赖包冲突：为了兼容 Debian 12 的 PEP 668 限制，使用了 apt-get install python3-requests 而不是 pip，确保安装 100% 顺畅。
+**无感流量统计 & TG 控制台**
+- **自动注入 API 与 Stats**：自动配置 config.json，在本地 10085 端口安全开启 Xray 流量统计，客户端自动标记为 "email": "user@reality"。
+- **内置 Telegram 机器人**：安装时可选配置 TG Bot。部署后自动注册为守护进程（Systemd），随时随地在聊天界面管理服务器。
+- **精准定时重置**：自动植入 Linux 定时任务（Cron），每月 18 号凌晨自动清零周期流量（符合多数商家的计费重置逻辑），TG 面板同步显示下次重置日期。
+- **完美兼容 Debian 12**：采用 apt-get install python3-requests 替代 pip，完美绕过 PEP 668 环境限制，确保 100% 安装顺畅。
+- **前置交互优化**：将所有提问（端口设置、TG 参数、WARP 安装）全部提前，告别守在电脑前等下一步，真正实现一次回车，后台搞定。
+- **随机端口策略**：默认不再采用单一的 443 端口，改为每次随机生成高位端口，进一步降低特征风险（也可手动指定 443）。
 
-自动配置了定时任务（Cron）：如果是安装机器人，会自动帮你写好每月 18 号零点的流量清零任务。
+---
 
+## Telegram 机器人面板说明
 
-🤖 服务器管理助手已上线！
+配置成功后，向你的机器人发送 /start 或 /menu 即可呼出底部快捷菜单键盘：
 
-点击下方菜单按钮，即可随时随地管理和监控你的服务器：
-📊 网络用量 —— 查看当前下载/上传流量及总计，显示每月重置 (系统自动重置)。
-🖥️ 系统状态 —— 实时获取服务器的运行时长、内存使用率和 CPU 负载。
-🔄 重启 Xray —— 一键重启 Xray 服务，用于排查节点卡顿。
-🌀 重启 VPS —— 远程向服务器发送重启指令，安全方便。
+- **网络用量** —— 实时查询 Xray 当前周期的下载/上传流量及总计（点击只统计不重置，系统会在每月18号自动重置）。
+- **系统状态** —— 实时获取服务器的运行时长、内存使用率和 CPU 负载。
+- **重启 Xray** —— 远程一键执行 systemctl restart xray，快速排查节点卡顿。
+- **重启 VPS** —— 远程向服务器发送 reboot 指令，安全方便，无需登录 SSH。
 
-发送 /start 或 /menu 即可呼出底部快捷菜单键盘。
+---
 
--------------------------------------------------------------------------------
+## 一键安装 / 卸载命令
 
+本脚本已将安装与彻底卸载集成在一个主菜单中，复制以下命令并在 SSH 终端运行即可：
 
-
-# 说明 
-这个一键脚本超级简单。有效语句8行(其中BBR 5行, 安装Xray 1行, 生成x25519公私钥 1行，生成UUID 1行)+Xray配置文件69行(其中你需要修改4行), 其它都是用来检验小白输入错误参数或者搭建条件不满足的。
-
-你如果不放心开源的脚本，你可以自己执行那8行有效语句，再修改配置文件中的4行，也能达到一样的效果。
-
-Reality底层是TCP直连，如果你的VPS已经被墙，那肯定用不了。出门左转 https://github.com/crazypeace/v2ray_wss
-
-# 一键安装
-
-apt update && apt install -y curl && bash <(curl -L https://raw.githubusercontent.com/meiti789789/xray-vless-reality/main/install.sh)
-
-脚本中很大部分都是在校验用户的输入。其实照着下面的步骤自己配置就行了。
-
-# 具体手搓步骤 (点击展开)
-<details>
-    <summary>(点击展开)</summary>
-
-# 打开BBR
-```
-sed -i '/net.ipv4.tcp_congestion_control/d' /etc/sysctl.conf
-sed -i '/net.core.default_qdisc/d' /etc/sysctl.conf
-echo "net.ipv4.tcp_congestion_control = bbr" >>/etc/sysctl.conf
-echo "net.core.default_qdisc = fq" >>/etc/sysctl.conf
-sysctl -p >/dev/null 2>&1
-```
-
-
-# 安装Xray
-source: https://github.com/XTLS/Xray-install
-```
-bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
-```
-
-
-# 生成 x25519 公钥和私钥
-```
-xray x25519
-```
-私钥会在服务端用到，公钥会在客户端用到。
-
-
-# 生成 UUID
-```
-xray uuid
-```
-
-# 选一个你喜欢的网站 (SNI)
-比如，`learn.microsoft.com`
-
-
-# 选一个你喜欢的指纹 (Fingerprint)
-可选项见此：https://xtls.github.io/en/config/transport.html 不想选，就用`random`
-![image](https://github.com/crazypeace/xray-vless-reality/assets/665889/89cdc776-95b4-4003-b89f-ac5a48bd1da5)
-
-
-# Reality 协议中定义了 ShortId, SpiderX
-个人使用可以不管，留空
-
-
-# 配置 /usr/local/etc/xray/config.json
-```
-{ // VLESS + Reality
-  "log": {
-    "loglevel": "warning"
-  },
-  "inbounds": [
-    {
-      "listen": "0.0.0.0",
-      "port": 443,    // 理论上可以随便改，不过从访问梯子的行为上，我个人认为使用443比较合适
-      "protocol": "vless",
-      "settings": {
-        "clients": [
-          {
-            "id": "你的UUID",    // ***改这里
-            "flow": "xtls-rprx-vision"
-          }
-        ],
-        "decryption": "none"
-      },
-      "streamSettings": {
-        "network": "tcp",
-        "security": "reality",
-        "realitySettings": {
-          "show": false,
-          "dest": "你喜欢的网站:443",    // ***如 learn.microsoft.com:443
-          "xver": 0,
-          "serverNames": ["你喜欢的网站"],    //***如 learn.microsoft.com
-          "privateKey": "你的**私钥**",    // ***改这里
-          "shortIds": [""]    // 可以留空
-        }
-      },
-      "sniffing": {
-        "enabled": true,
-        "destOverride": [
-          "http",
-          "tls"
-        ]
-      }
-    }
-  ],
-  "outbounds": [
-    {
-      "protocol": "freedom",
-      "tag": "direct"
-    },
-    {
-      "protocol": "blackhole",
-      "tag": "block"
-    }
-  ],
-  "dns": {
-    "servers": [
-      "8.8.8.8",
-      "1.1.1.1",
-      "2001:4860:4860::8888",
-      "2606:4700:4700::1111",
-      "localhost"
-    ]
-  },
-  "routing": {
-    "domainStrategy": "IPIfNonMatch",
-    "rules": [
-      {
-        "type": "field",
-        "ip": ["geoip:private"],
-        "outboundTag": "block"
-      }
-    ]
-  }
-}
-```
-
-# 客户端参数配置
-脚本最后会输出VLESS链接，方便你导入翻墙客户端。
-
-如果你是手搓自建，请参考下图配置。特别需要注意的是，客户端用的是**公钥**。和服务端用的**私钥**不一样。
-![image](https://github.com/crazypeace/xray-vless-reality/assets/665889/52a943aa-ba8b-4a4a-a7ca-21c75807d678)
-
-如果你是手搓VLESS链接，那么参考：https://github.com/XTLS/Xray-core/discussions/716
-如 `vless://${xray_id}@${ip}:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni=${domain}&fp=${fingerprint}&pbk=${public_key}&type=tcp#VLESS_R_${ip}`
-
-# 如果是 IPv6 only 的小鸡，用 WARP 添加 IPv4 出站能力
-```
-bash <(curl -L git.io/warp.sh) 4
-```
-
-</details>
-
-# Uninstall
-```
-如果你只是想单独卸载并重装 Xray
-bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ remove --purge
-
-如果你想把服务器彻底清理干净（包括 Xray 和机器人）
-bash <(curl -L https://raw.githubusercontent.com/meiti789789/xray-vless-reality/main/install.sh)
-
-```
-
-# 私货
-对于喜欢V2rayN PAC模式的朋友，欢迎使用支持Reality的 [v2rayN-3.29-VLESS](https://github.com/crazypeace/v2rayN-3.29-VLESS)
-![image](https://github.com/crazypeace/xray-vless-reality/assets/665889/c45c11a1-e326-4c70-9c55-8ec45608c472)
-
-# 脚本支持带参数运行
-```
-bash <(curl -L https://github.com/crazypeace/xray-vless-reality/raw/main/install.sh) <netstack> [port] [domain] [UUID]
-```
-
-其中, 
-
-`netstack` 6 表示 IPv6 入站; 4 表示 IPv4 入站.
-
-`port` 端口. 不写的话, 默认443
-
-`domain` 你指定的网站域名. 不写的话, 默认 learn.microsoft.com
-
-`UUID` 你的UUID. 不写的话, 自动生成
-
-例如,
-```
-bash <(curl -L https://github.com/crazypeace/xray-vless-reality/raw/main/install.sh) 6
-bash <(curl -L https://github.com/crazypeace/xray-vless-reality/raw/main/install.sh) 6 443
-bash <(curl -L https://github.com/crazypeace/xray-vless-reality/raw/main/install.sh) 6 443 learn.microsoft.com
-bash <(curl -L https://github.com/crazypeace/xray-vless-reality/raw/main/install.sh) 6 443 learn.microsoft.com 1b0b723f-0544-4f9c-8df8-2b8975c5e47a
-```
-
-
-# 用你的STAR告诉我这个Repo对你有用 Welcome STARs! :)
-[![Stargazers over time](https://starchart.cc/crazypeace/xray-vless-reality.svg)](https://starchart.cc/crazypeace/xray-vless-reality)
+```bash
+apt update && apt install -y curl && bash <(curl -L [https://raw.githubusercontent.com/meiti789789/xray-vless-reality/main/install.sh](https://raw.githubusercontent.com/meiti789789/xray-vless-reality/main/install.sh))
