@@ -35,3 +35,9 @@ Xray, VLESS_Reality模式 极简一键脚本 + Telegram 全自动服务器管理
 ```bash
 apt update && apt install -y curl && bash <(curl -L https://raw.githubusercontent.com/meiti789789/xray-vless-reality/main/install.sh)
 -----------------------------------------------------------
+
+## 鸣谢
+  
+核心代码逻辑归功于原作者 crazypeace。对于喜欢 V2rayN PAC 模式的朋友，欢迎使用原作者支持 Reality 的 v2rayN-3.29-VLESS (https://github.com/crazypeace/v2rayN-3.29-VLESS)。
+
+欢迎对本仓库点亮 STAR！
