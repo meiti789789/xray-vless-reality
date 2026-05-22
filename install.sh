@@ -1,7 +1,9 @@
+#!/bin/bash
+
 # 等待1秒, 避免curl下载脚本的打印与脚本本身的显示冲突, 吃掉了提示用户按回车继续的信息
 sleep 1
 
-echo -e "                     _ ___                   \n ___ ___ __ __ ___ _| |  _|___ __ __   _ ___ \n|-_ |_  |  |  |-_ | _ |   |- _|  |  |_| |_  |\n|___|___|  _  |___|___|_|_|___|  _  |___|___|\n        |_____|               |_____|        "
+echo -e "                    _ ___                    \n ___ ___ __ __ ___ _| |  _|___ __ __   _ ___ \n|-_ |_  |  |  |-_ | _ |   |- _|  |  |_| |_  |\n|___|___|  _  |___|___|_|_|___|  _  |___|___|\n        |_____|               |_____|        "
 red='\e[91m'
 green='\e[92m'
 yellow='\e[93m'
@@ -175,33 +177,23 @@ pause
 
 # 准备工作
 apt update
-apt install -y curl wget sudo jq qrencode net-tools lsof
+apt install -y curl wget sudo jq qrencode net-tools lsof cron
 
 # Xray官方脚本 安装最新版本
 echo
 echo -e "${yellow}Xray官方脚本安装 v25.10.15 版本$none"
-# echo -e "${yellow}Xray官方脚本安装最新版本$none"
 echo "----------------------------------------------------------------"
 bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install --version v25.10.15
-# bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
 
 # 更新 geodata
 bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install-geodata
 
 # 如果脚本带参数执行的, 要在安装了xray之后再生成默认私钥公钥shortID
 if [[ -n $uuid ]]; then
-  # 私钥种子
-  # x25519对私钥有一定要求, 不是任意随机的都满足要求, 所以下面这个字符串只能当作种子看待
   reality_key_seed=$(echo -n ${uuid} | md5sum | head -c 32 | base64 -w 0 | tr '+/' '-_' | tr -d '=')
-
-  # 生成私钥公钥
-  # xray x25519 如果接收一个合法的私钥, 会生成对应的公钥. 如果接收一个非法的私钥, 会先"修正"为合法的私钥. 这个"修正"的过程, 会修改其中的一些字节
-  # https://github.dev/XTLS/Xray-core/blob/6830089d3c42483512842369c908f9de75da2eaa/main/commands/all/curve25519.go#L36
   tmp_key=$(echo -n ${reality_key_seed} | xargs xray x25519 -i)
   private_key=$(echo ${tmp_key} | awk '{print $2}')
   public_key=$(echo ${tmp_key} | awk '{print $4}')
-
-  # ShortID
   shortid=$(echo -n ${uuid} | sha1sum | head -c 16)
 
   echo
@@ -224,14 +216,7 @@ echo 'net.ipv4.tcp_congestion_control=bbr' | sudo tee -a /etc/sysctl.d/99-bbr.co
 echo 'tcp_bbr' | sudo tee /etc/modules-load.d/bbr.conf
 sudo sysctl --system
 
-# 旧写法
-# sed -i '/net.ipv4.tcp_congestion_control/d' /etc/sysctl.conf
-# sed -i '/net.core.default_qdisc/d' /etc/sysctl.conf
-# echo "net.ipv4.tcp_congestion_control = bbr" >>/etc/sysctl.conf
-# echo "net.core.default_qdisc = fq" >>/etc/sysctl.conf
-# sysctl -p >/dev/null 2>&1
-
-# 配置 VLESS_Reality 模式, 需要:端口, UUID, x25519公私钥, 目标网站
+# 配置 VLESS_Reality 模式
 echo
 echo -e "$yellow配置 VLESS_Reality 模式$none"
 echo "----------------------------------------------------------------"
@@ -306,13 +291,7 @@ fi
 
 # x25519公私钥
 if [[ -z $private_key ]]; then
-  # 私钥种子
-  # x25519对私钥有一定要求, 不是任意随机的都满足要求, 所以下面这个字符串只能当作种子看待
   reality_key_seed=$(echo -n ${uuid} | md5sum | head -c 32 | base64 -w 0 | tr '+/' '-_' | tr -d '=')
-
-  # 生成私钥公钥
-  # xray x25519 如果接收一个合法的私钥, 会生成对应的公钥. 如果接收一个非法的私钥, 会先"修正"为合法的私钥. 这个"修正"的过程, 会修改其中的一些字节
-  # https://github.dev/XTLS/Xray-core/blob/6830089d3c42483512842369c908f9de75da2eaa/main/commands/all/curve25519.go#L36
   tmp_key=$(echo -n ${reality_key_seed} | xargs xray x25519 -i)
   default_private_key=$(echo ${tmp_key} | awk '{print $2}')
   default_public_key=$(echo ${tmp_key} | awk '{print $4}')
@@ -347,11 +326,9 @@ if [[ -z $shortid ]]; then
       error
       continue
     elif [[ $(( ${#shortid} % 2 )) -ne 0 ]]; then
-      # 字符串包含奇数个字符
       error
       continue
     else
-      # 字符串包含偶数个字符
       echo
       echo
       echo -e "$yellow ShortID = ${cyan}${shortid}$none"
@@ -375,7 +352,9 @@ if [[ -z $domain ]]; then
   echo
 fi
 
-# 配置config.json
+# ===========================
+# 写入自带流量统计功能的 config.json
+# ===========================
 echo
 echo -e "$yellow 配置 /usr/local/etc/xray/config.json $none"
 echo "----------------------------------------------------------------"
@@ -386,33 +365,43 @@ cat > /usr/local/etc/xray/config.json <<-EOF
     "error": "/var/log/xray/error.log",
     "loglevel": "warning"
   },
+  "api": {
+    "services": ["StatsService"],
+    "tag": "api"
+  },
+  "stats": {},
+  "policy": {
+    "levels": {
+      "0": {
+        "statsUserUplink": true,
+        "statsUserDownlink": true
+      }
+    },
+    "system": {
+      "statsInboundUplink": true,
+      "statsInboundDownlink": true
+    }
+  },
   "inbounds": [
-    // [inbound] 如果你想使用其它翻墙服务端如(HY2或者NaiveProxy)对接v2ray的分流规则, 那么取消下面一段的注释, 并让其它翻墙服务端接到下面这个socks 1080端口
-    // {
-    //   "listen":"127.0.0.1",
-    //   "port":1080,
-    //   "protocol":"socks",
-    //   "sniffing":{
-    //     "enabled":true,
-    //     "destOverride":[
-    //       "http",
-    //       "tls"
-    //     ]
-    //   },
-    //   "settings":{
-    //     "auth":"noauth",
-    //     "udp":false
-    //   }
-    // },
+    {
+      "listen": "127.0.0.1",
+      "port": 10085,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "127.0.0.1"
+      },
+      "tag": "api"
+    },
     {
       "listen": "0.0.0.0",
-      "port": ${port},    // ***
+      "port": ${port},
       "protocol": "vless",
       "settings": {
         "clients": [
           {
-            "id": "${uuid}",    // ***
-            "flow": "xtls-rprx-vision"
+            "id": "${uuid}",
+            "flow": "xtls-rprx-vision",
+            "email": "user@reality"
           }
         ],
         "decryption": "none"
@@ -422,11 +411,11 @@ cat > /usr/local/etc/xray/config.json <<-EOF
         "security": "reality",
         "realitySettings": {
           "show": false,
-          "dest": "${domain}:443",    // ***
+          "dest": "${domain}:443",
           "xver": 0,
-          "serverNames": ["${domain}"],    // ***
-          "privateKey": "${private_key}",    // ***私钥
-          "shortIds": ["${shortid}"]    // ***
+          "serverNames": ["${domain}"],
+          "privateKey": "${private_key}",
+          "shortIds": ["${shortid}"]
         }
       },
       "sniffing": {
@@ -440,31 +429,30 @@ cat > /usr/local/etc/xray/config.json <<-EOF
       "protocol": "freedom",
       "tag": "direct"
     },
-// [outbound]
-{
-    "protocol": "freedom",
-    "settings": {
-        "domainStrategy": "UseIPv4"
+    {
+        "protocol": "freedom",
+        "settings": {
+            "domainStrategy": "UseIPv4"
+        },
+        "tag": "force-ipv4"
     },
-    "tag": "force-ipv4"
-},
-{
-    "protocol": "freedom",
-    "settings": {
-        "domainStrategy": "UseIPv6"
+    {
+        "protocol": "freedom",
+        "settings": {
+            "domainStrategy": "UseIPv6"
+        },
+        "tag": "force-ipv6"
     },
-    "tag": "force-ipv6"
-},
-{
-    "protocol": "socks",
-    "settings": {
-        "servers": [{
-            "address": "127.0.0.1",
-            "port": 40000 //warp socks5 port
-        }]
-     },
-    "tag": "socks5-warp"
-},
+    {
+        "protocol": "socks",
+        "settings": {
+            "servers": [{
+                "address": "127.0.0.1",
+                "port": 40000
+            }]
+         },
+        "tag": "socks5-warp"
+    },
     {
       "protocol": "blackhole",
       "tag": "block"
@@ -482,22 +470,11 @@ cat > /usr/local/etc/xray/config.json <<-EOF
   "routing": {
     "domainStrategy": "IPIfNonMatch",
     "rules": [
-// [routing-rule]
-//{
-//   "type": "field",
-//   "domain": ["geosite:google", "geosite:openai"],  // ***
-//   "outboundTag": "force-ipv6"  // force-ipv6 // force-ipv4 // socks5-warp
-//},
-//{
-//   "type": "field",
-//   "domain": ["geosite:cn"],  // ***
-//   "outboundTag": "force-ipv6"  // force-ipv6 // force-ipv4 // socks5-warp // blocked
-//},
-//{
-//   "type": "field",
-//   "ip": ["geoip:cn"],  // ***
-//   "outboundTag": "force-ipv6"  // force-ipv6 // force-ipv4 // socks5-warp // blocked
-//},
+      {
+        "inboundTag": ["api"],
+        "outboundTag": "api",
+        "type": "field"
+      },
       {
         "type": "field",
         "ip": ["geoip:private"],
@@ -513,6 +490,193 @@ echo
 echo -e "$yellow重启 Xray$none"
 echo "----------------------------------------------------------------"
 service xray restart
+
+
+# ==========================================
+# 新增功能区：配置 Telegram 机器人和定时清空流量任务
+# ==========================================
+echo
+echo -e "$yellow【可选功能】配置 Telegram 流量查询与控制机器人$none"
+echo "----------------------------------------------------------------"
+read -p "请输入你的 Telegram Bot Token (不需要机器人请直接回车跳过): " TG_TOKEN
+if [[ -n "$TG_TOKEN" ]]; then
+    read -p "请输入你的 Telegram Chat ID (防滥用, 必填纯数字): " TG_CHAT_ID
+    if [[ -n "$TG_CHAT_ID" ]]; then
+        echo -e "$green正在部署 Telegram 机器人并配置环境...$none"
+        # 安装 python 和 requests 库 (兼容 Debian 12 强制环境)
+        apt-get install -y python3 python3-requests
+
+        # 生成 Python 脚本 (使用定界符，防止bash干扰里面的变量)
+        cat > /root/tg_xray_bot.py <<-'EOF'
+import subprocess
+import requests
+import time
+import datetime
+
+# --- 由脚本自动替换参数 ---
+BOT_TOKEN = 'YOUR_BOT_TOKEN_HERE'
+ALLOWED_CHAT_ID = YOUR_CHAT_ID_HERE
+
+REPLY_KEYBOARD = {
+    "keyboard": [
+        [{"text": "📊 网络用量"}, {"text": "🖥️ 系统状态"}],
+        [{"text": "🔄 重启 Xray"}, {"text": "🌀 重启 VPS"}]
+    ],
+    "resize_keyboard": True,
+    "is_persistent": True
+}
+
+def execute_cmd(cmd):
+    try:
+        return subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.STDOUT).strip()
+    except Exception as e:
+        return f"获取失败"
+
+def get_traffic():
+    cmd_down = "/usr/local/bin/xray api statsquery --server=127.0.0.1:10085 -pattern 'user>>>user@reality>>>traffic>>>downlink' | grep 'value' | awk '{print $2}'"
+    cmd_up = "/usr/local/bin/xray api statsquery --server=127.0.0.1:10085 -pattern 'user>>>user@reality>>>traffic>>>uplink' | grep 'value' | awk '{print $2}'"
+    
+    try:
+        down_bytes = int(execute_cmd(cmd_down) or 0)
+        up_bytes = int(execute_cmd(cmd_up) or 0)
+    except:
+        down_bytes = up_bytes = 0
+
+    down_gb = down_bytes / (1024**3)
+    up_gb = up_bytes / (1024**3)
+    return round(down_gb, 2), round(up_gb, 2)
+
+def get_next_reset_date():
+    today = datetime.date.today()
+    if today.day >= 18:
+        if today.month == 12:
+            next_reset = datetime.date(today.year + 1, 1, 18)
+        else:
+            next_reset = datetime.date(today.year, today.month + 1, 18)
+    else:
+        next_reset = datetime.date(today.year, today.month, 18)
+    return next_reset.strftime("%Y-%m-%d")
+
+def send_message(chat_id, text):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    payload = {
+        'chat_id': chat_id,
+        'text': text,
+        'parse_mode': 'Markdown',
+        'reply_markup': REPLY_KEYBOARD
+    }
+    try:
+        requests.post(url, json=payload, timeout=10)
+    except Exception as e:
+        pass
+
+def main():
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
+    offset = None
+
+    print("Bot is running...")
+    while True:
+        try:
+            res = requests.get(url, params={'timeout': 100, 'offset': offset}, timeout=110)
+            data = res.json()
+            
+            if data.get('ok'):
+                for update in data['result']:
+                    offset = update['update_id'] + 1
+                    message = update.get('message', {})
+                    text = message.get('text', '')
+                    chat_id = message.get('chat', {}).get('id')
+
+                    if chat_id != ALLOWED_CHAT_ID:
+                        continue
+
+                    if text in ['/start', '/menu']:
+                        send_message(chat_id, "👋 欢迎使用服务器管理助手，请选择下方菜单操作：")
+
+                    elif text == "📊 网络用量" or text == "/stats":
+                        down, up = get_traffic()
+                        total = round(down + up, 2)
+                        next_date = get_next_reset_date()
+                        reply_text = (
+                            f"📊 **当前网络用量**\n"
+                            f"📥 下载: {down} GB\n"
+                            f"📤 上传: {up} GB\n"
+                            f"🌐 总计: {total} GB\n\n"
+                            f"🔄 下次重置: {next_date}"
+                        )
+                        send_message(chat_id, reply_text)
+
+                    elif text == "🖥️ 系统状态":
+                        uptime = execute_cmd("uptime -p | sed 's/up //'")
+                        mem_usage = execute_cmd("free -m | awk 'NR==2{printf \"%.2f%%\", $3*100/$2 }'")
+                        cpu_load = execute_cmd("top -bn1 | grep load | awk '{printf \"%.2f\", $(NF-2)}'")
+                        reply_text = (
+                            f"🖥️ **系统运行状态**\n"
+                            f"⏱️ 运行时长: {uptime}\n"
+                            f"🧠 内存使用: {mem_usage}\n"
+                            f"⚙️ CPU 负载: {cpu_load}"
+                        )
+                        send_message(chat_id, reply_text)
+
+                    elif text == "🔄 重启 Xray":
+                        send_message(chat_id, "⏳ 正在重启 Xray 服务...")
+                        execute_cmd("systemctl restart xray")
+                        status = execute_cmd("systemctl is-active xray")
+                        if status == "active":
+                            send_message(chat_id, "✅ Xray 重启成功并已运行！\n*注意：重启后当前周期的流量统计已清零。*")
+                        else:
+                            send_message(chat_id, f"❌ Xray 重启失败，当前状态: {status}")
+
+                    elif text == "🌀 重启 VPS":
+                        send_message(chat_id, "⚠️ **正在向服务器发送重启指令...**\n\nVPS 即将断开连接并开始重启，大约需要 1-2 分钟。请在重启完成后重新呼出菜单。")
+                        time.sleep(1)
+                        execute_cmd("reboot")
+
+        except Exception as e:
+            time.sleep(5)
+
+if __name__ == '__main__':
+    main()
+EOF
+
+        # 替换对应的 Token 和 Chat ID
+        sed -i "s/YOUR_BOT_TOKEN_HERE/${TG_TOKEN}/g" /root/tg_xray_bot.py
+        sed -i "s/YOUR_CHAT_ID_HERE/${TG_CHAT_ID}/g" /root/tg_xray_bot.py
+
+        # 生成 Systemd 服务配置
+        cat > /etc/systemd/system/xray-tg-bot.service <<-EOF
+[Unit]
+Description=Telegram Bot for Xray Traffic Stats
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 /root/tg_xray_bot.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        systemctl daemon-reload
+        systemctl enable xray-tg-bot
+        systemctl restart xray-tg-bot
+        echo -e "$green✅ Telegram 机器人服务已后台启动！你可以去 TG 发送 /start 了。$none"
+
+        # 配置每月18号自动清理流量的Cron
+        echo -e "$green正在配置每月18号流量自动重置任务...$none"
+        systemctl enable cron >/dev/null 2>&1
+        systemctl start cron >/dev/null 2>&1
+        # 追加进 crontab (如果不存在的话)
+        (crontab -l 2>/dev/null | grep -v "xray api statsquery"; echo "0 0 18 * * /usr/local/bin/xray api statsquery --server=127.0.0.1:10085 -pattern 'user>>>user@reality>>>traffic>>>downlink' --reset > /dev/null 2>&1") | crontab -
+        (crontab -l 2>/dev/null | grep -v "xray api statsquery"; echo "0 0 18 * * /usr/local/bin/xray api statsquery --server=127.0.0.1:10085 -pattern 'user>>>user@reality>>>traffic>>>uplink' --reset > /dev/null 2>&1") | crontab -
+        echo -e "$green✅ 每月18号凌晨自动清零流量已设置完毕。$none"
+    fi
+fi
+# ==========================================
+
 
 # 指纹FingerPrint
 fingerprint="random"
