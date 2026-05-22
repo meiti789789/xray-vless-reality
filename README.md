@@ -1,7 +1,7 @@
 # xray-vless-reality (定制版)
 Xray, VLESS_Reality模式 极简一键脚本 + Telegram 全自动服务器管理台
 
-基于 crazypeace (https://github.com/crazypeace/xray-vless-reality) 的极简脚本深度定制，保留了原版轻量、无废话的特性，并大幅增强了实用功能和交互体验。
+基于 crazypeace (https://github.com/crazypeace/xray-vless-reality) 的极简脚本深度定制，保留了原版轻量，并大幅增强了实用功能和交互体验。
 
 ---
 
@@ -33,5 +33,4 @@ Xray, VLESS_Reality模式 极简一键脚本 + Telegram 全自动服务器管理
 本脚本已将安装与彻底卸载集成在一个主菜单中，复制以下命令并在 SSH 终端运行即可：
 
 ```bash
-apt update && apt install -y curl && bash <(curl -L [https://raw.githubusercontent.com/meiti789789/xray-vless-reality/main/install.sh](https://raw.githubusercontent.com/meiti789789/xray-vless-reality/main/install.sh))
-
+apt update && apt install -y curl && bash <(curl -L https://raw.githubusercontent.com/meiti789789/xray-vless-reality/main/install.sh)
