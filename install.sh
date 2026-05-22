@@ -32,11 +32,9 @@ uninstall_all() {
     echo -e "$yellow正在执行彻底卸载...$none"
     echo "----------------------------------------------------------------"
     
-    # 1. 卸载 Xray
     echo -e "$cyan[1/3] 正在卸载 Xray 并清理配置...$none"
     bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ remove --purge
     
-    # 2. 清理 TG 机器人
     echo -e "$cyan[2/3] 正在清理 Telegram 机器人服务...$none"
     systemctl stop xray-tg-bot >/dev/null 2>&1
     systemctl disable xray-tg-bot >/dev/null 2>&1
@@ -44,11 +42,9 @@ uninstall_all() {
     rm -f /root/tg_xray_bot.py
     systemctl daemon-reload
     
-    # 3. 清理 Cron 定时任务
     echo -e "$cyan[3/3] 正在清理流量重置定时任务...$none"
     crontab -l 2>/dev/null | grep -v "xray api statsquery" | crontab -
     
-    # 4. 删除生成的 URL 信息文件
     rm -f ~/_vless_reality_url_
     
     echo -e "$green✅ 卸载完成！Xray、配置文件、TG机器人和定时任务已被全部清理。$none"
@@ -58,67 +54,44 @@ uninstall_all() {
 # ==========================================
 # 主菜单界面
 # ==========================================
-echo -e "$cyan欢迎使用 Xray VLESS-Reality 极简脚本 (随机端口 + 流量统计 + TG 控制台)$none"
+echo -e "$cyan欢迎使用 Xray VLESS-Reality 极简定制版 (随机端口 + 流量统计 + 前置交互)$none"
 echo "----------------------------------------------------------------"
-echo -e "${green}1.${none} 安装 / 配置 Xray + TG 机器人"
-echo -e "${red}2.${none} 完全卸载 (彻底清理 Xray 和 TG 机器人)"
+echo -e "${green}1.${none} 安装 / 配置 Xray 环境"
+echo -e "${red}2.${none} 完全卸载 (彻底清理 Xray 和 附加服务)"
 echo -e "${yellow}0.${none} 退出"
 echo "----------------------------------------------------------------"
 read -p "请输入选项 [0-2]: " menu_choice
 
 case "$menu_choice" in
-    1)
-        # 继续执行下方的安装流程
-        ;;
-    2)
-        uninstall_all
-        ;;
-    0)
-        exit 0
-        ;;
-    *)
-        error
-        exit 1
-        ;;
+    1) ;;
+    2) uninstall_all ;;
+    0) exit 0 ;;
+    *) error; exit 1 ;;
 esac
 
 # ==========================================
 # 安装流程核心代码开始
 # ==========================================
 
-# 确保有 curl 和 wget
 apt-get -y install curl wget -qq
 
-# 说明
 echo
 echo -e "$yellow此脚本仅兼容于Debian 10+系统. 如果你的系统不符合,请Ctrl+C退出脚本$none"
 echo -e "可以去 ${cyan}https://github.com/crazypeace/xray-vless-reality${none} 查看脚本整体思路和关键命令, 以便针对你自己的系统做出调整."
 echo -e "有问题加群 ${cyan}https://t.me/+q5WPfGjtwukyZjhl${none}"
-echo -e "本脚本支持带参数执行, 省略交互过程, 详见GitHub."
 echo "----------------------------------------------------------------"
 
-# 本机 IP
 InFaces=($(ls /sys/class/net/ | grep -E '^(eth|ens|eno|esp|enp|venet|vif)'))
-
-for i in "${InFaces[@]}"; do  # 从网口循环获取IP
+for i in "${InFaces[@]}"; do
     Public_IPv4=$(curl -4s --interface "$i" -m 2 https://www.cloudflare.com/cdn-cgi/trace | grep -oP "ip=\K.*$")
     Public_IPv6=$(curl -6s --interface "$i" -m 2 https://www.cloudflare.com/cdn-cgi/trace | grep -oP "ip=\K.*$")
-
-    if [[ -n "$Public_IPv4" ]]; then  # 检查是否获取到IP地址
-        IPv4="$Public_IPv4"
-    fi
-    if [[ -n "$Public_IPv6" ]]; then  # 检查是否获取到IP地址
-        IPv6="$Public_IPv6"
-    fi
+    if [[ -n "$Public_IPv4" ]]; then IPv4="$Public_IPv4"; fi
+    if [[ -n "$Public_IPv6" ]]; then IPv6="$Public_IPv6"; fi
 done
 
-# 通过IP, host, 时区, 生成UUID.
 uuidSeed=${IPv4}${IPv6}$(cat /proc/sys/kernel/hostname)$(timedatectl | awk '/Time zone/ {print $3}')
 default_uuid=$(curl -sL https://www.uuidtools.com/api/generate/v3/namespace/ns:dns/name/${uuidSeed} | grep -oP '[^-]{8}-[^-]{4}-[^-]{4}-[^-]{4}-[^-]{12}')
 
-# ----------------------------------------------------------------
-# 检测是否定义了任意一个环境变量
-# ----------------------------------------------------------------
 _use_env_vars=0
 if [[ -n "${_MYIP_}" || -n "${_MYPORT_}" || -n "${_MYDOMAIN_}" || -n "${_MYUUID_}" ]]; then
     _use_env_vars=1
@@ -127,111 +100,61 @@ fi
 if [[ $_use_env_vars -eq 1 ]]; then
     echo -e "$cyan[环境变量模式] 检测到环境变量, 忽略命令行参数.$none"
     echo "----------------------------------------------------------------"
-
     if [[ -n "${_MYIP_}" ]]; then
         ip="${_MYIP_}"
-        if [[ "${ip}" == *:* ]]; then
-            netstack=6
-        else
-            netstack=4
-        fi
+        if [[ "${ip}" == *:* ]]; then netstack=6; else netstack=4; fi
     else
-        if [[ -n "$IPv4" ]]; then
-            netstack=4
-            ip=${IPv4}
-        elif [[ -n "$IPv6" ]]; then
-            netstack=6
-            ip=${IPv6}
-        else
-            warn "没有获取到公共IP"
-        fi
+        if [[ -n "$IPv4" ]]; then netstack=4; ip=${IPv4};
+        elif [[ -n "$IPv6" ]]; then netstack=6; ip=${IPv6};
+        else warn "没有获取到公共IP"; fi
     fi
 
-    # 环境变量如果没定义端口，就随机生成
-    if [[ -n "${_MYPORT_}" ]]; then
-        port="${_MYPORT_}"
-    else
-        port=$((RANDOM % 55535 + 10000))
-    fi
+    if [[ -n "${_MYPORT_}" ]]; then port="${_MYPORT_}"
+    else port=$((RANDOM % 55535 + 10000)); fi
 
-    if [[ -n "${_MYDOMAIN_}" ]]; then
-        domain="${_MYDOMAIN_}"
-    else
-        domain="learn.microsoft.com"
-    fi
+    if [[ -n "${_MYDOMAIN_}" ]]; then domain="${_MYDOMAIN_}"
+    else domain="learn.microsoft.com"; fi
 
-    if [[ -n "${_MYUUID_}" ]]; then
-        uuid="${_MYUUID_}"
-    else
-        uuid="${default_uuid}"
-    fi
-
-    echo -e "$yellow netstack  = ${cyan}${netstack}${none}"
-    echo -e "$yellow 本机IP    = ${cyan}${ip}${none}"
-    echo -e "$yellow 端口 (Port)= ${cyan}${port}${none}"
-    echo -e "$yellow 用户ID (User ID / UUID) = $cyan${uuid}${none}"
-    echo -e "$yellow SNI       = ${cyan}${domain}${none}"
-    echo "----------------------------------------------------------------"
+    if [[ -n "${_MYUUID_}" ]]; then uuid="${_MYUUID_}"
+    else uuid="${default_uuid}"; fi
+    
+    # 环境变量模式默认不安装附加组件，可跳过后续交互
+    TG_TOKEN=""
+    INSTALL_WARP="n"
 
 elif [ $# -ge 1 ]; then
     case ${1} in
-    4)
-        netstack=4
-        ip=${IPv4}
-        ;;
-    6)
-        netstack=6
-        ip=${IPv6}
-        ;;
+    4) netstack=4; ip=${IPv4} ;;
+    6) netstack=6; ip=${IPv6} ;;
     *)
-        if [[ -n "$IPv4" ]]; then
-            netstack=4
-            ip=${IPv4}
-        elif [[ -n "$IPv6" ]]; then
-            netstack=6
-            ip=${IPv6}
-        else
-            warn "没有获取到公共IP"
-        fi
+        if [[ -n "$IPv4" ]]; then netstack=4; ip=${IPv4}
+        elif [[ -n "$IPv6" ]]; then netstack=6; ip=${IPv6}
+        else warn "没有获取到公共IP"; fi
         ;;
     esac
 
     port=${2}
-    if [[ -z $port ]]; then
-      port=$((RANDOM % 55535 + 10000))
-    fi
+    if [[ -z $port ]]; then port=$((RANDOM % 55535 + 10000)); fi
 
     domain=${3}
-    if [[ -z $domain ]]; then
-      domain="learn.microsoft.com"
-    fi
+    if [[ -z $domain ]]; then domain="learn.microsoft.com"; fi
 
     uuid=${4}
-    if [[ -z $uuid ]]; then
-        uuid=${default_uuid}
-    fi
-
-    echo -e "$yellow netstack = ${cyan}${netstack}${none}"
-    echo -e "$yellow 本机IP = ${cyan}${ip}${none}"
-    echo -e "$yellow 端口 (Port) = ${cyan}${port}${none}"
-    echo -e "$yellow 用户ID (User ID / UUID) = $cyan${uuid}${none}"
-    echo -e "$yellow SNI = ${cyan}${domain}${none}"
-    echo "----------------------------------------------------------------"
+    if [[ -z $uuid ]]; then uuid=${default_uuid}; fi
+    
+    # 带参模式默认不安装附加组件
+    TG_TOKEN=""
+    INSTALL_WARP="n"
 fi
-
-pause
 
 # 准备工作
 apt update
 apt install -y curl wget sudo jq qrencode net-tools lsof cron
 
-# Xray官方脚本 安装最新版本
 echo
 echo -e "${yellow}Xray官方脚本安装 v25.10.15 版本$none"
 echo "----------------------------------------------------------------"
 bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install --version v25.10.15
-
-# 更新 geodata
 bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install-geodata
 
 if [[ -n $uuid ]]; then
@@ -240,16 +163,8 @@ if [[ -n $uuid ]]; then
   private_key=$(echo ${tmp_key} | awk '{print $2}')
   public_key=$(echo ${tmp_key} | awk '{print $4}')
   shortid=$(echo -n ${uuid} | sha1sum | head -c 16)
-
-  echo
-  echo "私钥公钥要在安装xray之后才可以生成"
-  echo -e "$yellow 私钥 (PrivateKey) = ${cyan}${private_key}${none}"
-  echo -e "$yellow 公钥 (PublicKey) = ${cyan}${public_key}${none}"
-  echo -e "$yellow ShortId = ${cyan}${shortid}${none}"
-  echo "----------------------------------------------------------------"
 fi
 
-# 打开BBR
 echo
 echo -e "$yellow打开BBR$none"
 echo "----------------------------------------------------------------"
@@ -261,141 +176,106 @@ echo 'net.ipv4.tcp_congestion_control=bbr' | sudo tee -a /etc/sysctl.d/99-bbr.co
 echo 'tcp_bbr' | sudo tee /etc/modules-load.d/bbr.conf
 sudo sysctl --system
 
-# 配置 VLESS_Reality 模式
-echo
-echo -e "$yellow配置 VLESS_Reality 模式$none"
-echo "----------------------------------------------------------------"
+# ==========================================
+# 集中进行所有前置交互提问
+# ==========================================
+if [[ $_use_env_vars -eq 0 && $# -eq 0 ]]; then
+    echo
+    echo -e "$yellow配置 VLESS_Reality 模式$none"
+    echo "----------------------------------------------------------------"
 
-if [[ -z $netstack ]]; then
-  echo
-  echo -e "如果你的小鸡是${magenta}双栈(同时有IPv4和IPv6的IP)${none}，请选择你把Xray搭在哪个'网口'上"
-  echo "如果你不懂这段话是什么意思, 请直接回车"
-  read -p "$(echo -e "Input ${cyan}4${none} for IPv4, ${cyan}6${none} for IPv6:") " netstack
+    if [[ -z $netstack ]]; then
+      echo -e "如果你的小鸡是${magenta}双栈(同时有IPv4和IPv6的IP)${none}，请选择你把Xray搭在哪个'网口'上"
+      echo "如果你不懂这段话是什么意思, 请直接回车"
+      read -p "$(echo -e "Input ${cyan}4${none} for IPv4, ${cyan}6${none} for IPv6:") " netstack
 
-  if [[ $netstack == "4" ]]; then
-    ip=${IPv4}
-  elif [[ $netstack == "6" ]]; then
-    ip=${IPv6}
-  else
-    if [[ -n "$IPv4" ]]; then
-      ip=${IPv4}
-      netstack=4
-    elif [[ -n "$IPv6" ]]; then
-      ip=${IPv6}
-      netstack=6
-    else
-      warn "没有获取到公共IP"
+      if [[ $netstack == "4" ]]; then ip=${IPv4}
+      elif [[ $netstack == "6" ]]; then ip=${IPv6}
+      else
+        if [[ -n "$IPv4" ]]; then ip=${IPv4}; netstack=4
+        elif [[ -n "$IPv6" ]]; then ip=${IPv6}; netstack=6
+        else warn "没有获取到公共IP"; fi
+      fi
     fi
-  fi
-fi
 
-# 端口逻辑：如果你没指定环境变量/参数，在这里交互提示你输入，默认值是随机的
-if [[ -z $port ]]; then
-  default_port=$((RANDOM % 55535 + 10000))
-  while :; do
-    read -p "$(echo -e "请输入端口 [${magenta}1-65535${none}] Input port (默认随机端口 ${cyan}${default_port}$none):")" port
-    [ -z "$port" ] && port=$default_port
-    case $port in
-    [1-9] | [1-9][0-9] | [1-9][0-9][0-9] | [1-9][0-9][0-9][0-9] | [1-5][0-9][0-9][0-9][0-9] | 6[0-4][0-9][0-9][0-9] | 65[0-4][0-9][0-9] | 655[0-3][0-5])
-      echo
-      echo
-      echo -e "$yellow 端口 (Port) = ${cyan}${port}${none}"
-      echo "----------------------------------------------------------------"
-      echo
-      break
-      ;;
-    *)
-      error
-      ;;
-    esac
-  done
-fi
-
-if [[ -z $uuid ]]; then
-  while :; do
-    echo -e "请输入 "$yellow"UUID"$none" "
-    read -p "$(echo -e "(默认ID: ${cyan}${default_uuid}$none):")" uuid
-    [ -z "$uuid" ] && uuid=$default_uuid
-    case $(echo -n $uuid | sed -E 's/[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}//g') in
-    "")
-        echo
-        echo
-        echo -e "$yellow UUID = $cyan$uuid$none"
-        echo "----------------------------------------------------------------"
-        echo
-        break
-        ;;
-    *)
-        error
-        ;;
-    esac
-  done
-fi
-
-if [[ -z $private_key ]]; then
-  reality_key_seed=$(echo -n ${uuid} | md5sum | head -c 32 | base64 -w 0 | tr '+/' '-_' | tr -d '=')
-  tmp_key=$(echo -n ${reality_key_seed} | xargs xray x25519 -i)
-  default_private_key=$(echo ${tmp_key} | awk '{print $2}')
-  default_public_key=$(echo ${tmp_key} | awk '{print $4}')
-
-  echo -e "请输入 "$yellow"x25519 Private Key"$none" x25519私钥 :"
-  read -p "$(echo -e "(默认私钥 Private Key: ${cyan}${default_private_key}$none):")" private_key
-  if [[ -z "$private_key" ]]; then
-    private_key=$default_private_key
-    public_key=$default_public_key
-  else
-    tmp_key=$(echo -n ${private_key} | xargs xray x25519 -i)
-    private_key=$(echo ${tmp_key} | awk '{print $2}')
-    public_key=$(echo ${tmp_key} | awk '{print $4}')
-  fi
-
-  echo
-  echo
-  echo -e "$yellow 私钥 (PrivateKey) = ${cyan}${private_key}$none"
-  echo -e "$yellow 公钥 (PublicKey) = ${cyan}${public_key}$none"
-  echo "----------------------------------------------------------------"
-  echo
-fi
-
-if [[ -z $shortid ]]; then
-  default_shortid=$(echo -n ${uuid} | sha1sum | head -c 16)
-  while :; do
-    echo -e "请输入 "$yellow"ShortID"$none" :"
-    read -p "$(echo -e "(默认ShortID: ${cyan}${default_shortid}$none):")" shortid
-    [ -z "$shortid" ] && shortid=$default_shortid
-    if [[ ${#shortid} -gt 16 ]]; then
-      error
-      continue
-    elif [[ $(( ${#shortid} % 2 )) -ne 0 ]]; then
-      error
-      continue
-    else
-      echo
-      echo
-      echo -e "$yellow ShortID = ${cyan}${shortid}$none"
-      echo "----------------------------------------------------------------"
-      echo
-      break
+    if [[ -z $port ]]; then
+      default_port=$((RANDOM % 55535 + 10000))
+      while :; do
+        read -p "$(echo -e "请输入端口 [${magenta}1-65535${none}] Input port (默认随机端口 ${cyan}${default_port}$none):")" port
+        [ -z "$port" ] && port=$default_port
+        case $port in
+        [1-9] | [1-9][0-9] | [1-9][0-9][0-9] | [1-9][0-9][0-9][0-9] | [1-5][0-9][0-9][0-9][0-9] | 6[0-4][0-9][0-9][0-9] | 65[0-4][0-9][0-9] | 655[0-3][0-5])
+          break ;;
+        *) error ;;
+        esac
+      done
     fi
-  done
+
+    if [[ -z $uuid ]]; then
+      while :; do
+        echo -e "请输入 "$yellow"UUID"$none" "
+        read -p "$(echo -e "(默认ID: ${cyan}${default_uuid}$none):")" uuid
+        [ -z "$uuid" ] && uuid=$default_uuid
+        case $(echo -n $uuid | sed -E 's/[a-z0-9]{8}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{12}//g') in
+        "") break ;;
+        *) error ;;
+        esac
+      done
+    fi
+
+    if [[ -z $private_key ]]; then
+      reality_key_seed=$(echo -n ${uuid} | md5sum | head -c 32 | base64 -w 0 | tr '+/' '-_' | tr -d '=')
+      tmp_key=$(echo -n ${reality_key_seed} | xargs xray x25519 -i)
+      default_private_key=$(echo ${tmp_key} | awk '{print $2}')
+      default_public_key=$(echo ${tmp_key} | awk '{print $4}')
+
+      echo -e "请输入 "$yellow"x25519 Private Key"$none" x25519私钥 :"
+      read -p "$(echo -e "(默认私钥: ${cyan}${default_private_key}$none):")" private_key
+      if [[ -z "$private_key" ]]; then
+        private_key=$default_private_key
+        public_key=$default_public_key
+      else
+        tmp_key=$(echo -n ${private_key} | xargs xray x25519 -i)
+        private_key=$(echo ${tmp_key} | awk '{print $2}')
+        public_key=$(echo ${tmp_key} | awk '{print $4}')
+      fi
+    fi
+
+    if [[ -z $shortid ]]; then
+      default_shortid=$(echo -n ${uuid} | sha1sum | head -c 16)
+      while :; do
+        echo -e "请输入 "$yellow"ShortID"$none" :"
+        read -p "$(echo -e "(默认ShortID: ${cyan}${default_shortid}$none):")" shortid
+        [ -z "$shortid" ] && shortid=$default_shortid
+        if [[ ${#shortid} -gt 16 ]]; then error; continue
+        elif [[ $(( ${#shortid} % 2 )) -ne 0 ]]; then error; continue
+        else break; fi
+      done
+    fi
+
+    if [[ -z $domain ]]; then
+      echo -e "请输入一个 ${magenta}合适的域名${none} Input the domain"
+      read -p "(例如: learn.microsoft.com): " domain
+      [ -z "$domain" ] && domain="learn.microsoft.com"
+    fi
+    
+    echo "----------------------------------------------------------------"
+    echo -e "$yellow【可选组件】配置 Telegram 流量查询与控制机器人$none"
+    read -p "请输入你的 Telegram Bot Token (不需要机器人请直接回车跳过): " TG_TOKEN
+    if [[ -n "$TG_TOKEN" ]]; then
+        read -p "请输入你的 Telegram Chat ID (防滥用, 必填纯数字): " TG_CHAT_ID
+    fi
+
+    echo "----------------------------------------------------------------"
+    echo -e "$yellow【可选组件】配置 Cloudflare WARP 出站$none"
+    echo "一般情况无需安装 WARP。但如果是纯 IPv6 小鸡，或常遇 Google 验证码，可以选择安装。"
+    read -p "是否需要安装 WARP? [y/N] (默认不安装, 直接回车即可): " INSTALL_WARP
+    INSTALL_WARP=${INSTALL_WARP:-n}
 fi
+# ==========================================
+# 前置交互结束，开始全自动静默配置
+# ==========================================
 
-if [[ -z $domain ]]; then
-  echo -e "请输入一个 ${magenta}合适的域名${none} Input the domain"
-  read -p "(例如: learn.microsoft.com): " domain
-  [ -z "$domain" ] && domain="learn.microsoft.com"
-
-  echo
-  echo
-  echo -e "$yellow SNI = ${cyan}$domain$none"
-  echo "----------------------------------------------------------------"
-  echo
-fi
-
-
-# ===========================
-# 写入支持统计功能的 config.json
-# ===========================
 echo
 echo -e "$yellow 配置 /usr/local/etc/xray/config.json $none"
 echo "----------------------------------------------------------------"
@@ -472,16 +352,12 @@ cat > /usr/local/etc/xray/config.json <<-EOF
     },
     {
         "protocol": "freedom",
-        "settings": {
-            "domainStrategy": "UseIPv4"
-        },
+        "settings": { "domainStrategy": "UseIPv4" },
         "tag": "force-ipv4"
     },
     {
         "protocol": "freedom",
-        "settings": {
-            "domainStrategy": "UseIPv6"
-        },
+        "settings": { "domainStrategy": "UseIPv6" },
         "tag": "force-ipv6"
     },
     {
@@ -526,27 +402,14 @@ cat > /usr/local/etc/xray/config.json <<-EOF
 }
 EOF
 
-# 重启 Xray
-echo
-echo -e "$yellow重启 Xray$none"
-echo "----------------------------------------------------------------"
 service xray restart
 
-
-# ==========================================
-# TG 机器人和流量清零任务配置
-# ==========================================
-echo
-echo -e "$yellow【可选功能】配置 Telegram 流量查询与控制机器人$none"
-echo "----------------------------------------------------------------"
-read -p "请输入你的 Telegram Bot Token (不需要机器人请直接回车跳过): " TG_TOKEN
+# 配置 TG 机器人
 if [[ -n "$TG_TOKEN" ]]; then
-    read -p "请输入你的 Telegram Chat ID (防滥用, 必填纯数字): " TG_CHAT_ID
-    if [[ -n "$TG_CHAT_ID" ]]; then
-        echo -e "$green正在部署 Telegram 机器人并配置环境...$none"
-        apt-get install -y python3 python3-requests
+    echo -e "$green正在后台部署 Telegram 机器人并配置环境...$none"
+    apt-get install -y python3 python3-requests >/dev/null 2>&1
 
-        cat > /root/tg_xray_bot.py <<-'EOF'
+    cat > /root/tg_xray_bot.py <<-'EOF'
 import subprocess
 import requests
 import time
@@ -573,16 +436,12 @@ def execute_cmd(cmd):
 def get_traffic():
     cmd_down = "/usr/local/bin/xray api statsquery --server=127.0.0.1:10085 -pattern 'user>>>user@reality>>>traffic>>>downlink' | grep 'value' | awk '{print $2}'"
     cmd_up = "/usr/local/bin/xray api statsquery --server=127.0.0.1:10085 -pattern 'user>>>user@reality>>>traffic>>>uplink' | grep 'value' | awk '{print $2}'"
-    
     try:
         down_bytes = int(execute_cmd(cmd_down) or 0)
         up_bytes = int(execute_cmd(cmd_up) or 0)
     except:
         down_bytes = up_bytes = 0
-
-    down_gb = down_bytes / (1024**3)
-    up_gb = up_bytes / (1024**3)
-    return round(down_gb, 2), round(up_gb, 2)
+    return round(down_bytes / (1024**3), 2), round(up_bytes / (1024**3), 2)
 
 def get_next_reset_date():
     today = datetime.date.today()
@@ -597,27 +456,17 @@ def get_next_reset_date():
 
 def send_message(chat_id, text):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {
-        'chat_id': chat_id,
-        'text': text,
-        'parse_mode': 'Markdown',
-        'reply_markup': REPLY_KEYBOARD
-    }
-    try:
-        requests.post(url, json=payload, timeout=10)
-    except Exception as e:
-        pass
+    payload = {'chat_id': chat_id, 'text': text, 'parse_mode': 'Markdown', 'reply_markup': REPLY_KEYBOARD}
+    try: requests.post(url, json=payload, timeout=10)
+    except: pass
 
 def main():
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
     offset = None
-
-    print("Bot is running...")
     while True:
         try:
             res = requests.get(url, params={'timeout': 100, 'offset': offset}, timeout=110)
             data = res.json()
-            
             if data.get('ok'):
                 for update in data['result']:
                     offset = update['update_id'] + 1
@@ -625,64 +474,44 @@ def main():
                     text = message.get('text', '')
                     chat_id = message.get('chat', {}).get('id')
 
-                    if chat_id != ALLOWED_CHAT_ID:
-                        continue
+                    if chat_id != ALLOWED_CHAT_ID: continue
 
                     if text in ['/start', '/menu']:
                         send_message(chat_id, "👋 欢迎使用服务器管理助手，请选择下方菜单操作：")
-
                     elif text == "📊 网络用量" or text == "/stats":
                         down, up = get_traffic()
                         total = round(down + up, 2)
                         next_date = get_next_reset_date()
-                        reply_text = (
-                            f"📊 **当前网络用量**\n"
-                            f"📥 下载: {down} GB\n"
-                            f"📤 上传: {up} GB\n"
-                            f"🌐 总计: {total} GB\n\n"
-                            f"🔄 下次自动重置: {next_date}"
-                        )
-                        send_message(chat_id, reply_text)
-
+                        send_message(chat_id, f"📊 **当前网络用量**\n📥 下载: {down} GB\n📤 上传: {up} GB\n🌐 总计: {total} GB\n\n🔄 下次自动重置: {next_date}")
                     elif text == "🖥️ 系统状态":
                         uptime = execute_cmd("uptime -p | sed 's/up //'")
                         mem_usage = execute_cmd("free -m | awk 'NR==2{printf \"%.2f%%\", $3*100/$2 }'")
                         cpu_load = execute_cmd("top -bn1 | grep load | awk '{printf \"%.2f\", $(NF-2)}'")
-                        reply_text = (
-                            f"🖥️ **系统运行状态**\n"
-                            f"⏱️ 运行时长: {uptime}\n"
-                            f"🧠 内存使用: {mem_usage}\n"
-                            f"⚙️ CPU 负载: {cpu_load}"
-                        )
-                        send_message(chat_id, reply_text)
-
+                        send_message(chat_id, f"🖥️ **系统运行状态**\n⏱️ 运行时长: {uptime}\n🧠 内存使用: {mem_usage}\n⚙️ CPU 负载: {cpu_load}")
                     elif text == "🔄 重启 Xray":
                         send_message(chat_id, "⏳ 正在重启 Xray 服务...")
                         execute_cmd("systemctl restart xray")
-                        status = execute_cmd("systemctl is-active xray")
-                        if status == "active":
+                        if execute_cmd("systemctl is-active xray") == "active":
                             send_message(chat_id, "✅ Xray 重启成功并已运行！\n*注意：重启后当前周期的流量统计已清零。*")
                         else:
                             send_message(chat_id, f"❌ Xray 重启失败，当前状态: {status}")
-
                     elif text == "🌀 重启 VPS":
                         send_message(chat_id, "⚠️ **正在向服务器发送重启指令...**\n\nVPS 即将断开连接并开始重启，大约需要 1-2 分钟。")
                         time.sleep(1)
                         execute_cmd("reboot")
-
-        except Exception as e:
+        except:
             time.sleep(5)
 
 if __name__ == '__main__':
     main()
 EOF
 
-        sed -i "s/YOUR_BOT_TOKEN_HERE/${TG_TOKEN}/g" /root/tg_xray_bot.py
-        sed -i "s/YOUR_CHAT_ID_HERE/${TG_CHAT_ID}/g" /root/tg_xray_bot.py
+    sed -i "s/YOUR_BOT_TOKEN_HERE/${TG_TOKEN}/g" /root/tg_xray_bot.py
+    sed -i "s/YOUR_CHAT_ID_HERE/${TG_CHAT_ID}/g" /root/tg_xray_bot.py
 
-        cat > /etc/systemd/system/xray-tg-bot.service <<-EOF
+    cat > /etc/systemd/system/xray-tg-bot.service <<-EOF
 [Unit]
-Description=Telegram Bot for Xray Traffic Stats
+Description=Telegram Bot for Xray
 After=network.target
 
 [Service]
@@ -696,27 +525,48 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-        systemctl daemon-reload
-        systemctl enable xray-tg-bot
-        systemctl restart xray-tg-bot
-        echo -e "$green✅ Telegram 机器人服务已后台启动！你可以去 TG 发送 /start 了。$none"
+    systemctl daemon-reload
+    systemctl enable xray-tg-bot >/dev/null 2>&1
+    systemctl restart xray-tg-bot
+    
+    systemctl enable cron >/dev/null 2>&1
+    systemctl start cron >/dev/null 2>&1
+    (crontab -l 2>/dev/null | grep -v "xray api statsquery"; echo "0 0 18 * * /usr/local/bin/xray api statsquery --server=127.0.0.1:10085 -pattern 'user>>>user@reality>>>traffic>>>downlink' --reset > /dev/null 2>&1") | crontab -
+    (crontab -l 2>/dev/null | grep -v "xray api statsquery"; echo "0 0 18 * * /usr/local/bin/xray api statsquery --server=127.0.0.1:10085 -pattern 'user>>>user@reality>>>traffic>>>uplink' --reset > /dev/null 2>&1") | crontab -
+fi
 
-        echo -e "$green正在配置每月18号流量自动重置任务...$none"
-        systemctl enable cron >/dev/null 2>&1
-        systemctl start cron >/dev/null 2>&1
-        (crontab -l 2>/dev/null | grep -v "xray api statsquery"; echo "0 0 18 * * /usr/local/bin/xray api statsquery --server=127.0.0.1:10085 -pattern 'user>>>user@reality>>>traffic>>>downlink' --reset > /dev/null 2>&1") | crontab -
-        (crontab -l 2>/dev/null | grep -v "xray api statsquery"; echo "0 0 18 * * /usr/local/bin/xray api statsquery --server=127.0.0.1:10085 -pattern 'user>>>user@reality>>>traffic>>>uplink' --reset > /dev/null 2>&1") | crontab -
-        echo -e "$green✅ 每月18号凌晨自动清零流量已设置完毕。$none"
+# 安装 WARP 出站
+if [[ "${INSTALL_WARP,,}" == "y" ]]; then
+    if [[ $netstack == "6" ]]; then
+        echo -e "$yellow正在为 IPv6 小鸡用 WARP 创建 IPv4 出站...$none"
+        export LANG=en_US.UTF-8
+        bash <(curl -sSL https://raw.githubusercontent.com/fscarmen/warp/main/menu.sh) 4
+        service xray restart
+    elif [[ $netstack == "4" ]]; then
+        echo -e "$yellow正在为 IPv4 小鸡用 WARP 创建 IPv6 出站...$none"
+        export LANG=en_US.UTF-8
+        bash <(curl -sSL https://raw.githubusercontent.com/fscarmen/warp/main/menu.sh) 6
+        service xray restart
     fi
 fi
+
 # ==========================================
-
-
-# 指纹FingerPrint
+# 最终：输出节点信息和二维码（放在最底端防止被刷没）
+# ==========================================
 fingerprint="random"
-
-# SpiderX
 spiderx=""
+if [[ $netstack == "6" ]]; then
+  display_ip=[$ip]
+else
+  display_ip=$ip
+fi
+
+vless_reality_url="vless://${uuid}@${display_ip}:${port}?flow=xtls-rprx-vision&encryption=none&type=tcp&security=reality&sni=${domain}&fp=${fingerprint}&pbk=${public_key}&sid=${shortid}&spx=${spiderx}&#VLESS_R_${ip}"
+
+echo $vless_reality_url > ~/_vless_reality_url_
+echo "以下两个二维码完全一样的内容" >> ~/_vless_reality_url_
+qrencode -t UTF8 $vless_reality_url >> ~/_vless_reality_url_
+qrencode -t ANSI $vless_reality_url >> ~/_vless_reality_url_
 
 echo
 echo "---------- Xray 配置信息 -------------"
@@ -736,62 +586,11 @@ echo -e "$yellow ShortId = ${cyan}${shortid}$none"
 echo -e "$yellow SpiderX = ${cyan}${spiderx}$none"
 echo
 echo "---------- VLESS Reality URL ----------"
-if [[ $netstack == "6" ]]; then
-  ip=[$ip]
-fi
-vless_reality_url="vless://${uuid}@${ip}:${port}?flow=xtls-rprx-vision&encryption=none&type=tcp&security=reality&sni=${domain}&fp=${fingerprint}&pbk=${public_key}&sid=${shortid}&spx=${spiderx}&#VLESS_R_${ip}"
 echo -e "${cyan}${vless_reality_url}${none}"
 echo
-sleep 3
 echo "以下两个二维码完全一样的内容"
 qrencode -t UTF8 $vless_reality_url
 qrencode -t ANSI $vless_reality_url
 echo
 echo "---------- END -------------"
 echo "以上节点信息保存在 ~/_vless_reality_url_ 中"
-
-# 节点信息保存到文件中
-echo $vless_reality_url > ~/_vless_reality_url_
-echo "以下两个二维码完全一样的内容" >> ~/_vless_reality_url_
-qrencode -t UTF8 $vless_reality_url >> ~/_vless_reality_url_
-qrencode -t ANSI $vless_reality_url >> ~/_vless_reality_url_
-
-# 如果是 IPv6 小鸡，用 WARP 创建 IPv4 出站
-if [[ $netstack == "6" ]]; then
-    echo
-    echo -e "$yellow这是一个 IPv6 小鸡，用 WARP 创建 IPv4 出站$none"
-    echo "Telegram电报是直接访问IPv4地址的, 需要IPv4出站的能力"
-    echo "----------------------------------------------------------------"
-    pause
-
-    curl -LO https://gitlab.com/fscarmen/warp/-/raw/main/menu.sh
-    yes "" | bash menu.sh 4
-
-    echo
-    echo -e "$yellow重启 Xray$none"
-    echo "----------------------------------------------------------------"
-    service xray restart
-
-# 如果是 IPv4 小鸡，用 WARP 创建 IPv6 出站
-elif  [[ $netstack == "4" ]]; then
-    echo
-    echo -e "$yellow这是一个 IPv4 小鸡，用 WARP 创建 IPv6 出站$none"
-    echo -e "有些热门小鸡用原生的IPv4出站访问Google需要通过人机验证, 可以通过修改config.json指定google流量走WARP的IPv6出站解决"
-    echo -e "群组: ${cyan} https://t.me/+q5WPfGjtwukyZjhl ${none}"
-    echo -e "教程: ${cyan} https://zelikk.blogspot.com/2022/03/racknerd-v2ray-cloudflare-warp--ipv6-google-domainstrategy-outboundtag-routing.html ${none}"
-    echo -e "视频: ${cyan} https://youtu.be/Yvvm4IlouEk ${none}"
-    echo "----------------------------------------------------------------"
-    pause
-
-    curl -LO https://gitlab.com/fscarmen/warp/-/raw/main/menu.sh
-    yes "" | bash menu.sh 6
-
-    echo
-    echo -e "$yellow重启 Xray$none"
-    echo "----------------------------------------------------------------"
-    service xray restart
-
-fi
-
-echo
-echo "节点信息保存在 ~/_vless_reality_url_ 中"
